@@ -86,6 +86,8 @@ struct AttachmentView: View {
             guard let img = NSImage(data: data) else { failed = true; return }
             image = img
         } catch {
+            // Rows re-render and cancel their task; that isn't a failure.
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
             failed = true
         }
     }

@@ -85,10 +85,17 @@ struct MenuBarPanel: View {
         GlassEffectContainer(spacing: 8) {
             HStack(spacing: 8) {
                 Button("New Message", systemImage: "square.and.pencil") { app.compose() }
+                    .buttonStyle(.glassProminent)
                 Spacer()
-                Button("Open Pling", systemImage: "macwindow") { app.showMainWindow() }
+                Button { app.showMainWindow() } label: {
+                    Label("Open Pling", systemImage: "macwindow")
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .capsule)
             }
-            .buttonStyle(.glass)
             .disabled(subscriptions.isEmpty)
         }
         .padding(10)
