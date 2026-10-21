@@ -123,6 +123,12 @@ enum ConnectionStatus: Equatable {
         let key = "\(serverID.uuidString)|\(m.id)"
         if server.lastMessageID == nil || notify { server.lastMessageID = m.id }
         guard (try? context.fetchCount(FetchDescriptor<StoredMessage>(predicate: #Predicate { $0.key == key }))) == 0 else { return }
+        // Each seal uses a fresh nonce, so an identical ciphertext under a new id is a replay.
+        // ponytail: only catches replays within the retention window; a signed timestamp in the payload would close it fully.
+        if let raw = m.message, E2E.isEncrypted(raw) {
+            let subID = sub.id
+            guard (try? context.fetchCount(FetchDescriptor<StoredMessage>(predicate: #Predicate { $0.subscriptionID == subID && $0.rawBody == raw }))) == 0 else { return }
+        }
 
         let stored = StoredMessage(key: key, ntfyID: m.id, subscriptionID: sub.id, time: m.time, topic: m.topic,
                                    title: "", body: "", priority: m.priority, tags: [], click: nil, actions: [], isMarkdown: false)

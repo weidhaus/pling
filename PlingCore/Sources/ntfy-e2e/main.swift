@@ -73,10 +73,13 @@ case "send":
     if let path = options["--file"] {
         let url = URL(fileURLWithPath: path)
         guard let data = FileManager.default.contents(atPath: path) else { fail("can't read \(path)") }
-        payload.attachment = E2EAttachmentInfo(name: url.lastPathComponent,
-                                               type: UTType(filenameExtension: url.pathExtension)?.preferredMIMEType)
-        do { request.attachment = .init(data: try E2E.sealData(data, key: key), filename: "attachment.bin") }
-        catch { fail("encrypt failed: \(error)") }
+        do {
+            let sealed = try E2E.sealData(data, key: key)
+            payload.attachment = E2EAttachmentInfo(name: url.lastPathComponent,
+                                                   type: UTType(filenameExtension: url.pathExtension)?.preferredMIMEType,
+                                                   sha256: E2E.digest(sealed))
+            request.attachment = .init(data: sealed, filename: "attachment.bin")
+        } catch { fail("encrypt failed: \(error)") }
     }
     do {
         request.message = try E2E.seal(payload, key: key)

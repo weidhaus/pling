@@ -159,12 +159,19 @@ struct ComposeSheet: View {
             }
             let clickURL = URL(string: click.trimmingCharacters(in: .whitespaces)).flatMap { $0.scheme == nil ? nil : $0 }
 
-            if encrypt, let sub = subscription, let key = app.connections.key(for: sub) {
+            if encrypt {
+                // Fail closed: never fall back to plaintext when the user asked for encryption.
+                guard let key = subscription.flatMap({ app.connections.key(for: $0) }) else {
+                    error = "Couldn’t read this topic’s passphrase from the Keychain. Re-enter it in Topic Settings."
+                    return
+                }
                 var payload = E2EPayload(title: title.isEmpty ? nil : title, message: message, tags: tagList,
                                          priority: priority, click: clickURL, markdown: markdown)
                 if let file, let fileData {
-                    payload.attachment = E2EAttachmentInfo(name: file.lastPathComponent, type: UTType(filenameExtension: file.pathExtension)?.preferredMIMEType)
-                    request.attachment = .init(data: try E2E.sealData(fileData, key: key), filename: "attachment.bin")
+                    let sealed = try E2E.sealData(fileData, key: key)
+                    payload.attachment = E2EAttachmentInfo(name: file.lastPathComponent, type: UTType(filenameExtension: file.pathExtension)?.preferredMIMEType,
+                                                           sha256: E2E.digest(sealed))
+                    request.attachment = .init(data: sealed, filename: "attachment.bin")
                 }
                 request.title = E2E.encryptedTitle
                 request.message = try E2E.seal(payload, key: key)

@@ -133,6 +133,7 @@ struct MessageRow: View {
         let limit = compact ? 4 : 8
         return VStack(alignment: .leading, spacing: 2) {
             Text(Self.render(message))
+                .environment(\.openURL, OpenURLAction { ActionRunner.isSafe($0) ? .systemAction : .discarded })
                 .font(compact ? .callout : .body)
                 .foregroundStyle(message.decryptFailed ? .secondary : .primary)
                 .lineLimit(expanded ? nil : limit)
@@ -269,7 +270,7 @@ struct MessageMenu: View {
             }
         }
         Divider()
-        if let url = message.click {
+        if let url = message.click, ActionRunner.isSafe(url) {
             Button("Open Link") { NSWorkspace.shared.open(url) }
         }
         Button("Copy Text") {

@@ -128,10 +128,17 @@ public struct NtfyClient: Sendable {
     /// Downloads an attachment. Credentials are only sent to the ntfy server itself.
     public func fetch(_ url: URL) async throws -> Data {
         var request = URLRequest(url: url)
-        if url.host() == baseURL.host() { request = authorized(request) }
+        if Self.sameOrigin(url, baseURL) { request = authorized(request) }
         let (data, response) = try await session.data(for: request)
         try Self.check(response)
         return data
+    }
+
+    /// Scheme, host and port must all match, so a message can't steer credentials to http or another port.
+    static func sameOrigin(_ a: URL, _ b: URL) -> Bool {
+        func port(_ u: URL) -> Int? { u.port ?? ["http": 80, "https": 443][u.scheme?.lowercased() ?? ""] }
+        return a.scheme?.lowercased() == b.scheme?.lowercased() && a.host()?.lowercased() == b.host()?.lowercased()
+            && port(a) == port(b)
     }
 
     func authorized(_ request: URLRequest) -> URLRequest {

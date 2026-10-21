@@ -25,6 +25,7 @@ import SwiftData
     var attachmentURL: URL?
     var attachmentExpires: Date?
     var attachmentEncrypted = false
+    var attachmentSHA256: String?
 
     var isEncrypted = false
     var decryptFailed = false
@@ -54,6 +55,9 @@ import SwiftData
                           expires: attachmentExpires, url: attachmentURL)
     }
 
+    /// `attachmentName` as a single path component; the publisher controls the raw value.
+    var attachmentFileName: String? { attachmentName.flatMap(Attachment.fileName) }
+
     var serverID: UUID? { UUID(uuidString: String(key.prefix { $0 != "|" })) }
 
     /// Fill content fields from a plain ntfy message or a decrypted payload.
@@ -82,7 +86,13 @@ import SwiftData
         if let info = p.attachment {
             attachmentName = info.name
             attachmentType = info.type
+            attachmentSHA256 = info.sha256
             attachmentEncrypted = true
+        } else {
+            // The envelope is unauthenticated; don't show its attachment under the encrypted badge.
+            attachmentName = nil; attachmentType = nil; attachmentSize = nil
+            attachmentURL = nil; attachmentExpires = nil; attachmentSHA256 = nil
+            attachmentEncrypted = false
         }
         decryptFailed = false
     }

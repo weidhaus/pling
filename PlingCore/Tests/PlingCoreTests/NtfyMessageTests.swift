@@ -37,6 +37,13 @@ import Testing
         #expect(a.actions.first?.action == .unknown)
     }
 
+    @Test func attachmentFileNameStripsPaths() {
+        #expect(Attachment.fileName("cat.jpg") == "cat.jpg")
+        #expect(Attachment.fileName("../Library/LaunchAgents/x.plist") == "x.plist")
+        #expect(Attachment.fileName("/etc/passwd") == "passwd")
+        for bad in ["", ".", "..", "a/..", "/"] { #expect(Attachment.fileName(bad) == nil, "\(bad)") }
+    }
+
     @Test func emojiSplit() {
         let (emoji, plain) = Emoji.split(["warning", "skull", "backup"])
         #expect(emoji == ["⚠️", "💀"])

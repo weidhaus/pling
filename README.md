@@ -77,10 +77,10 @@ ntfy has no built-in end-to-end encryption, so Pling defines a small, documented
 |---|---|
 | **Key** | PBKDF2-HMAC-SHA256(passphrase, salt `"pling-e2e-v1:" + topic`, 600 000 iterations) → 32 bytes |
 | **Cipher** | AES-256-GCM, random 96-bit nonce |
-| **Plaintext** | JSON `{title, message, tags, priority, click, actions, markdown, attachment: {name, type}}` |
+| **Plaintext** | JSON `{title, message, tags, priority, click, actions, markdown, attachment: {name, type, sha256}}` |
 | **Body** | `pling:e2e:v1:` + base64url(nonce ‖ ciphertext ‖ tag), unpadded, ≤ 3072 bytes |
 | **In the clear** | Only the title `🔒 Encrypted message` and the priority, so urgency still works |
-| **Attachments** | Sealed the same way and uploaded as `attachment.bin`. The real name and type are inside the encrypted body. |
+| **Attachments** | Sealed the same way and uploaded as `attachment.bin`. The real name and type, and the hex SHA-256 of the sealed blob (optional; checked when present), are inside the encrypted body. |
 
 Test vector: passphrase `correct horse`, topic `alerts` → key `3f4eb1b83ee4637da1ef28b964e6bccd1623c37654f4421ad70dbad6a6c735d4`.
 

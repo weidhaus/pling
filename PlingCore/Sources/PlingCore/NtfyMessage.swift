@@ -137,4 +137,10 @@ public struct Attachment: Codable, Sendable, Hashable {
     }
 
     public var isExpired: Bool { expires.map { $0 < .now } ?? false }
+
+    /// The publisher-chosen name reduced to a single path component, safe to join onto a directory.
+    public static func fileName(_ name: String) -> String? {
+        let last = (name as NSString).lastPathComponent
+        return ["", ".", "..", "/"].contains(last) ? nil : last
+    }
 }

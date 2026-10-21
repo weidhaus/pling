@@ -37,7 +37,9 @@ public struct E2EPayload: Codable, Sendable, Equatable {
 public struct E2EAttachmentInfo: Codable, Sendable, Equatable {
     public var name: String
     public var type: String?
-    public init(name: String, type: String?) { self.name = name; self.type = type }
+    /// Hex SHA-256 of the sealed blob, binding it to this message. Absent from older senders.
+    public var sha256: String?
+    public init(name: String, type: String?, sha256: String? = nil) { self.name = name; self.type = type; self.sha256 = sha256 }
 }
 
 /// Pling E2E format v1. See README "Encryption" for the spec.
@@ -83,6 +85,10 @@ public enum E2E {
     public static func sealData(_ data: Data, key: SymmetricKey) throws -> Data {
         guard let combined = try AES.GCM.seal(data, using: key).combined else { throw Failure.badEncoding }
         return combined
+    }
+
+    public static func digest(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     public static func openData(_ data: Data, key: SymmetricKey) throws -> Data {

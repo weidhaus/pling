@@ -103,4 +103,14 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {
         #expect(req.value(forHTTPHeaderField: "Message") == "=?UTF-8?B?R3LDvMOfZQ==?=")
         #expect(req.httpBody == Data([1, 2, 3]))
     }
+
+    @Test func fetchSendsCredentialsOnlyToSameOrigin() async throws {
+        for (url, authed) in [("https://ntfy.example.com/file/x.png", true), ("https://ntfy.example.com:443/x.png", true),
+                              ("http://ntfy.example.com/x.png", false), ("https://ntfy.example.com:8443/x.png", false),
+                              ("https://other.example.com/x.png", false)] {
+            StubProtocol.requests = []
+            _ = try await client.fetch(URL(string: url)!)
+            #expect((StubProtocol.requests.first?.value(forHTTPHeaderField: "Authorization") != nil) == authed, "\(url)")
+        }
+    }
 }

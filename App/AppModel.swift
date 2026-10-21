@@ -237,7 +237,7 @@ enum SidebarItem: Hashable {
         let reminder = EKReminder(eventStore: eventStore)
         reminder.title = m.title.isEmpty ? (subscription(m.subscriptionID)?.title ?? m.topic) : m.title
         reminder.notes = m.body
-        reminder.url = m.click
+        reminder.url = m.click.flatMap { ActionRunner.isSafe($0) ? $0 : nil }
         reminder.calendar = calendar
         try eventStore.save(reminder, commit: true)
     }
@@ -247,7 +247,7 @@ enum SidebarItem: Hashable {
         switch action {
         case UNNotificationDefaultActionIdentifier:
             acknowledge(m)
-            if let url = m.click { NSWorkspace.shared.open(url) } else { show(m) }
+            if let url = m.click, ActionRunner.isSafe(url) { NSWorkspace.shared.open(url) } else { show(m) }
         case NoteAction.ack: acknowledge(m)
         case NoteAction.snooze15: snooze(m, .minutes15)
         case NoteAction.snooze60: snooze(m, .hour1)
@@ -293,6 +293,7 @@ enum SidebarItem: Hashable {
         if let cached = imageCache.object(forKey: m.key as NSString) { return cached as Data }
         guard let sub = subscription(m.subscriptionID), let server = sub.server else { throw URLError(.badURL) }
         var data = try await server.client.fetch(url)
+        if let sha = m.attachmentSHA256, E2E.digest(data) != sha { throw E2E.Failure.authentication }
         if m.attachmentEncrypted {
             guard let key = connections.key(for: sub) else { throw E2E.Failure.authentication }
             data = try E2E.openData(data, key: key)

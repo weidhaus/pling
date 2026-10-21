@@ -96,9 +96,9 @@ struct AttachmentView: View {
     private func preview() {
         Task {
             guard let data = try? await app.attachmentData(message) else { return }
-            let dir = FileManager.default.temporaryDirectory.appending(path: message.ntfyID)
+            let dir = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let url = dir.appending(path: message.attachmentName ?? "image")
+            let url = dir.appending(path: message.attachmentFileName ?? "image")
             if (try? data.write(to: url)) != nil { previewURL = url }
         }
     }
@@ -109,11 +109,12 @@ struct AttachmentView: View {
         do {
             let data = try await app.attachmentData(message)
             let downloads = try FileManager.default.url(for: .downloadsDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            var url = downloads.appending(path: message.attachmentName ?? "attachment")
+            let name = message.attachmentFileName ?? "attachment"
+            var url = downloads.appending(path: name)
             var n = 2
             while FileManager.default.fileExists(atPath: url.path) {
-                let base = (message.attachmentName as NSString?)?.deletingPathExtension ?? "attachment"
-                let ext = (message.attachmentName as NSString?)?.pathExtension ?? ""
+                let base = (name as NSString).deletingPathExtension
+                let ext = (name as NSString).pathExtension
                 url = downloads.appending(path: ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)")
                 n += 1
             }

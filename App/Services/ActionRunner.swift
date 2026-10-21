@@ -7,13 +7,18 @@ enum ActionRunner {
         let errorDescription: String?
     }
 
+    /// Schemes a message may open. Others (file:, smb:, other apps' schemes) could launch apps or mount shares.
+    static func isSafe(_ url: URL) -> Bool { ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") }
+
     static func run(_ action: Action) async throws {
         switch action.action {
         case .view:
-            guard let url = action.url else { throw Failure(errorDescription: "“\(action.label)” has no URL.") }
+            guard let url = action.url, isSafe(url) else { throw Failure(errorDescription: "“\(action.label)” has no web link.") }
             NSWorkspace.shared.open(url)
         case .http:
-            guard let url = action.url else { throw Failure(errorDescription: "“\(action.label)” has no URL.") }
+            guard let url = action.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+                throw Failure(errorDescription: "“\(action.label)” has no web URL.")
+            }
             var request = URLRequest(url: url)
             request.httpMethod = action.method ?? "POST"
             action.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
