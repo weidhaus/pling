@@ -96,7 +96,6 @@ struct NotificationSettings: View {
     @AppStorage(Prefs.realertMax) private var realertMax = 12
     @AppStorage(Prefs.tomorrowHour) private var tomorrowHour = 9
     @AppStorage(Prefs.remindersListID) private var remindersListID = ""
-    @State private var lists: [EKCalendar] = []
     @State private var remindersAuthorized = EKEventStore.authorizationStatus(for: .reminder) == .fullAccess
 
     var body: some View {
@@ -124,35 +123,24 @@ struct NotificationSettings: View {
                 if remindersAuthorized {
                     Picker("Reminders List", selection: $remindersListID) {
                         Text("Default List").tag("")
-                        ForEach(lists, id: \.calendarIdentifier) { Text($0.title).tag($0.calendarIdentifier) }
+                        ForEach(app.reminderLists, id: \.calendarIdentifier) { Text($0.title).tag($0.calendarIdentifier) }
                     }
                 } else {
                     LabeledContent("Reminders") {
                         Button("Allow Access…") {
-                            Task {
-                                remindersAuthorized = (try? await app.eventStore.requestFullAccessToReminders()) ?? false
-                                loadLists()
-                            }
+                            Task { remindersAuthorized = await app.requestReminders() }
                         }
                     }
                 }
             }
             Section {
-                Button("Open Notification Settings…") {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(Bundle.main.bundleIdentifier ?? "")")!)
-                }
+                Button("Open Notification Settings…") { app.openNotificationSettings() }
             } footer: {
                 Text("Choose banner style, sounds and Focus behavior in System Settings.").foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
         .frame(height: 440)
-        .onAppear(perform: loadLists)
-    }
-
-    private func loadLists() {
-        guard remindersAuthorized else { return }
-        lists = app.eventStore.calendars(for: .reminder).sorted { $0.title < $1.title }
     }
 }
 

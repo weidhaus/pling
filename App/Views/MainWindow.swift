@@ -13,14 +13,16 @@ struct MainWindow: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
         } detail: {
             if servers.isEmpty {
-                WelcomeView()
+                NoServersView()
             } else {
                 MessageList(item: app.selection ?? .all, search: search)
+                    .safeAreaInset(edge: .top, spacing: 0) { NotificationsOffBanner() }
             }
         }
         .searchable(text: $search, placement: .toolbar, prompt: "Search Messages")
         .sheet(isPresented: $app.isComposing) { ComposeSheet(initial: app.composeTopic) }
         .sheet(isPresented: $app.isAddingTopic) { TopicEditor(subscription: nil) }
+        .sheet(item: $app.editingTopic) { TopicEditor(subscription: $0) }
         .onAppear { NSApp.setActivationPolicy(.regular) }
         .onDisappear { NSApp.setActivationPolicy(.accessory) }
     }
@@ -219,6 +221,12 @@ struct MessageList: View {
                 Button("Mark All as Read", systemImage: "envelope.open") { app.markAllRead(visible) }
                     .disabled(!visible.contains { !$0.isRead })
             }
+            if let sub = currentSubscription {
+                ToolbarItem {
+                    Button("Topic Settings", systemImage: "slider.horizontal.3") { app.editTopic(sub) }
+                        .help("Topic Settings: name, notifications, encryption passphrase")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button("New Message", systemImage: "square.and.pencil") { app.compose(to: currentSubscription) }
             }
@@ -260,6 +268,27 @@ struct MessageList: View {
                     Button("New Message…") { app.compose(to: currentSubscription) }
                 }
             }
+        }
+    }
+}
+
+/// Shown when macOS has notifications turned off for Pling.
+struct NotificationsOffBanner: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        if app.notificationStatus == .denied {
+            HStack(spacing: 10) {
+                Image(systemName: "bell.slash.fill").foregroundStyle(.orange)
+                Text("Notifications are turned off for Pling, so new messages only appear here.")
+                    .font(.callout)
+                Spacer()
+                Button("Turn On…") { app.openNotificationSettings() }
+                    .controlSize(.small)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(.orange.opacity(0.12))
         }
     }
 }

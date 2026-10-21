@@ -145,27 +145,17 @@ struct ServerEditor: View {
     }
 }
 
-struct WelcomeView: View {
-    @Environment(AppModel.self) private var app
+struct NoServersView: View {
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "bell.badge.waveform.fill")
-                .font(.system(size: 52))
-                .foregroundStyle(.tint)
-                .symbolEffect(.wiggle, options: .nonRepeating)
-                .accessibilityHidden(true)
-            VStack(spacing: 6) {
-                Text("Welcome to Pling").font(.largeTitle.weight(.semibold))
-                Text("Connect to your ntfy server to get notifications on your Mac.")
-                    .foregroundStyle(.secondary)
-            }
-            ServerEditor(server: nil) { _ in app.isAddingTopic = true }
-                .frame(width: 460)
-                .fixedSize(horizontal: false, vertical: true)
-                .scrollDisabled(true)
+        ContentUnavailableView {
+            Label("No Servers", systemImage: "server.rack")
+        } description: {
+            Text("Connect to an ntfy server to start receiving messages.")
+        } actions: {
+            Button("Set Up Pling…") { openWindow(id: "onboarding") }
+                .buttonStyle(.borderedProminent)
         }
-        .padding(40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

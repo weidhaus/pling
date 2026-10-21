@@ -28,5 +28,11 @@
 	<string>© 2026 Justus-Constantin Weidhaus. MIT License.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Pling adds messages you choose to Reminders.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/weidhaus/pling/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>zg5CjuTwmnJiQIte5UWcT1L38VXVJ32a+jGCC+znKOc=</string>
 </dict>
 </plist>

@@ -3,6 +3,7 @@ import EventKit
 import PlingCore
 import ServiceManagement
 import SwiftData
+import Sparkle
 import SwiftUI
 import UserNotifications
 
@@ -27,11 +28,18 @@ enum SidebarItem: Hashable {
     var composeTopic: Subscription?
     var isComposing = false
     var isAddingTopic = false
+    var editingTopic: Subscription?
+    var notificationStatus = UNAuthorizationStatus.notDetermined
 
     let context: ModelContext
     @ObservationIgnored private(set) var connections: ConnectionManager!
     @ObservationIgnored let notifier = Notifier()
-    @ObservationIgnored let eventStore = EKEventStore()
+    @ObservationIgnored private(set) var eventStore = EKEventStore()
+    #if DEBUG
+    @ObservationIgnored let updater = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
+    #else
+    @ObservationIgnored let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    #endif
     @ObservationIgnored var openWindow: OpenWindowAction?
     @ObservationIgnored private var alertLoop: Task<Void, Never>?
     @ObservationIgnored private let imageCache = NSCache<NSString, NSData>()
@@ -58,7 +66,57 @@ enum SidebarItem: Hashable {
                 try? await Task.sleep(for: .seconds(15))
             }
         }
-        if hasServers { Task { await notifier.requestAuthorization() } }
+        Task {
+            await refreshNotificationStatus()
+            // Users who finished onboarding before it asked for permission get asked once now.
+            if Prefs.defaults.bool(forKey: Prefs.onboarded), notificationStatus == .notDetermined { await requestNotifications() }
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { Task { await self?.refreshNotificationStatus() } }
+        }
+    }
+
+    func refreshNotificationStatus() async {
+        notificationStatus = await notifier.authorizationStatus()
+    }
+
+    func requestNotifications() async {
+        await notifier.requestAuthorization()
+        await refreshNotificationStatus()
+    }
+
+    func openNotificationSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(Bundle.main.bundleIdentifier ?? "")")!)
+    }
+
+    var remindersAuthorized: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
+
+    /// Asks for Reminders access. A store created before access was granted can't see lists, so start a fresh one.
+    func requestReminders() async -> Bool {
+        let granted = (try? await eventStore.requestFullAccessToReminders()) ?? false
+        if granted { eventStore = EKEventStore() }
+        return granted
+    }
+
+    var reminderLists: [EKCalendar] {
+        remindersAuthorized ? eventStore.calendars(for: .reminder).sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending } : []
+    }
+
+    /// Adds a topic, reconnects its server and loads the server's cached messages.
+    @discardableResult func subscribe(to topic: String, on server: Server) -> Subscription {
+        let sub = Subscription(topic: topic, server: server)
+        context.insert(sub)
+        try? context.save()
+        connections.connect(server)
+        Task { await connections.backfill(sub) }
+        return sub
+    }
+
+    static func isValidTopic(_ topic: String) -> Bool { topic.wholeMatch(of: /[-_A-Za-z0-9]{1,64}/) != nil }
+
+    func editTopic(_ subscription: Subscription) {
+        editingTopic = subscription
+        showMainWindow()
     }
 
     #if DEBUG
@@ -166,16 +224,21 @@ enum SidebarItem: Hashable {
         if action.clear { acknowledge(m) }
     }
 
-    func addToReminders(_ m: StoredMessage) async throws {
-        guard try await eventStore.requestFullAccessToReminders() else {
+    func addToReminders(_ m: StoredMessage, list: EKCalendar? = nil) async throws {
+        let allowed = remindersAuthorized ? true : await requestReminders()
+        guard allowed else {
             throw ActionRunner.Failure(errorDescription: "Pling doesn’t have access to Reminders. Allow it in System Settings › Privacy & Security › Reminders.")
+        }
+        let listID = Prefs.defaults.string(forKey: Prefs.remindersListID) ?? ""
+        guard let calendar = list ?? eventStore.calendar(withIdentifier: listID)
+                ?? eventStore.defaultCalendarForNewReminders() ?? reminderLists.first else {
+            throw ActionRunner.Failure(errorDescription: "There’s no Reminders list to add to. Create one in Reminders first.")
         }
         let reminder = EKReminder(eventStore: eventStore)
         reminder.title = m.title.isEmpty ? (subscription(m.subscriptionID)?.title ?? m.topic) : m.title
         reminder.notes = m.body
         reminder.url = m.click
-        let listID = Prefs.defaults.string(forKey: Prefs.remindersListID) ?? ""
-        reminder.calendar = eventStore.calendar(withIdentifier: listID) ?? eventStore.defaultCalendarForNewReminders()
+        reminder.calendar = calendar
         try eventStore.save(reminder, commit: true)
     }
 

@@ -1,3 +1,4 @@
+import EventKit
 import PlingCore
 import SwiftUI
 
@@ -63,6 +64,12 @@ struct MessageRow: View {
                         .foregroundStyle(message.decryptFailed ? .secondary : .primary)
                 }
                 if !message.body.isEmpty { bodyText }
+                if message.decryptFailed, let subscription {
+                    Button(subscription.hasPassphrase ? "Change Passphrase…" : "Add Passphrase…", systemImage: "key.fill") {
+                        app.editTopic(subscription)
+                    }
+                    .controlSize(compact ? .small : .regular)
+                }
                 if message.attachment != nil {
                     AttachmentView(message: message, maxHeight: compact ? 150 : 240)
                 }
@@ -251,8 +258,15 @@ struct MessageMenu: View {
                 Button(option.label) { app.snooze(message, option) }
             }
         }
-        Button("Add to Reminders") {
-            Task { do { try await app.addToReminders(message) } catch { app.notifier.postFailure(error.localizedDescription) } }
+        let lists = app.reminderLists
+        if lists.isEmpty {
+            Button("Add to Reminders") { addToReminders(nil) }
+        } else {
+            Menu("Add to Reminders") {
+                ForEach(lists, id: \.calendarIdentifier) { list in
+                    Button(list.title) { addToReminders(list) }
+                }
+            }
         }
         Divider()
         if let url = message.click {
@@ -264,6 +278,12 @@ struct MessageMenu: View {
         }
         Divider()
         Button("Delete", role: .destructive) { app.delete(message) }
+    }
+}
+
+extension MessageMenu {
+    func addToReminders(_ list: EKCalendar?) {
+        Task { do { try await app.addToReminders(message, list: list) } catch { app.notifier.postFailure(error.localizedDescription) } }
     }
 }
 

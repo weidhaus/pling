@@ -42,6 +42,7 @@ struct MenuBarPanel: View {
                 Toggle("Do Not Disturb", isOn: $doNotDisturb)
                 Divider()
                 Button("Settings…") { openSettings(); NSApp.activate() }
+                Button("Check for Updates…") { app.updater.checkForUpdates(nil) }
                 Button("Quit Pling") { NSApp.terminate(nil) }
             }
             .labelStyle(.iconOnly)

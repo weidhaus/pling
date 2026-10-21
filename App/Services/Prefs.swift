@@ -9,6 +9,7 @@ enum Prefs {
     static let remindersListID = "remindersListID"
     static let retentionDays = "retentionDays"
     static let doNotDisturb = "doNotDisturb"
+    static let onboarded = "onboarded"
 
     static func register() {
         UserDefaults.standard.register(defaults: [

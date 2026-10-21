@@ -23,6 +23,7 @@ struct PlingApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuBarPanel()
+                .tint(Color("AccentColor"))
                 .environment(app)
                 .modelContainer(container)
         } label: {
@@ -34,6 +35,7 @@ struct PlingApp: App {
 
         Window("Pling", id: "main") {
             MainWindow()
+                .tint(Color("AccentColor"))
                 .environment(app)
                 .modelContainer(container)
         }
@@ -41,8 +43,20 @@ struct PlingApp: App {
         .defaultLaunchBehavior(.suppressed)
         .commands { PlingCommands(app: app) }
 
+        Window("Welcome to Pling", id: "onboarding") {
+            OnboardingView()
+                .tint(Color("AccentColor"))
+                .environment(app)
+                .modelContainer(container)
+        }
+        .windowResizability(.contentSize)
+        .windowStyle(.hiddenTitleBar)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
+
         Settings {
             SettingsView()
+                .tint(Color("AccentColor"))
                 .environment(app)
                 .modelContainer(container)
         }
@@ -66,11 +80,16 @@ struct MenuBarLabel: View {
     @AppStorage(Prefs.doNotDisturb) private var doNotDisturb = false
 
     var body: some View {
-        Image(systemName: doNotDisturb ? "bell.slash" : unread.isEmpty ? "bell" : "bell.badge")
+        Group {
+            if doNotDisturb { Image(systemName: "moon.fill") } else { Image(unread.isEmpty ? "MenuBarRead" : "MenuBarUnread") }
+        }
             .accessibilityLabel(unread.isEmpty ? "Pling" : "Pling, \(unread.count) unread")
             .task {
                 app.openWindow = openWindow
-                if !app.hasServers { app.showMainWindow() }
+                if !Prefs.defaults.bool(forKey: Prefs.onboarded) {
+                    // Existing installs with servers skip the setup but still land in it once to grant permissions.
+                    openWindow(id: "onboarding")
+                }
             }
     }
 }
@@ -80,6 +99,9 @@ struct PlingCommands: Commands {
     @AppStorage(Prefs.doNotDisturb) private var doNotDisturb = false
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { app.updater.checkForUpdates(nil) }
+        }
         CommandGroup(replacing: .newItem) {
             Button("New Message…") { app.compose() }
                 .keyboardShortcut("n")

@@ -7,6 +7,9 @@ options:
 packages:
   PlingCore:
     path: PlingCore
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.0
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -27,10 +30,11 @@ targets:
     dependencies:
       - package: PlingCore
         product: PlingCore
+      - package: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.weidhaus.pling
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: Pling
         ENABLE_USER_SCRIPT_SANDBOXING: NO
     info:
       path: App/Info.plist
@@ -40,6 +44,9 @@ targets:
         LSApplicationCategoryType: public.app-category.utilities
         NSHumanReadableCopyright: "© 2026 Justus-Constantin Weidhaus. MIT License."
         NSRemindersFullAccessUsageDescription: "Pling adds messages you choose to Reminders."
+        SUFeedURL: https://github.com/weidhaus/pling/releases/latest/download/appcast.xml
+        SUPublicEDKey: zg5CjuTwmnJiQIte5UWcT1L38VXVJ32a+jGCC+znKOc= # gitleaks:allow (public key, ships in the app)
+        SUEnableAutomaticChecks: true
     entitlements:
       path: App/Pling.entitlements
       properties:

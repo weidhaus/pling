@@ -19,7 +19,7 @@ struct TopicEditor: View {
     @State private var removePassphrase = false
 
     private var isNew: Bool { subscription == nil }
-    private var topicIsValid: Bool { topic.wholeMatch(of: /[-_A-Za-z0-9]{1,64}/) != nil }
+    private var topicIsValid: Bool { AppModel.isValidTopic(topic) }
     private var duplicate: Bool {
         isNew && servers.first { $0.id == serverID }?.subscriptions.contains { $0.topic == topic } == true
     }
@@ -100,8 +100,7 @@ struct TopicEditor: View {
             sub = subscription
         } else {
             guard let server = servers.first(where: { $0.id == serverID }) else { return }
-            sub = Subscription(topic: topic, server: server)
-            context.insert(sub)
+            sub = app.subscribe(to: topic, on: server)
         }
         sub.displayName = displayName.isEmpty ? nil : displayName
         sub.emoji = emoji.isEmpty ? nil : emoji
@@ -116,14 +115,7 @@ struct TopicEditor: View {
         try? context.save()
         if passphraseChanged { app.connections.passphraseChanged(sub) }
 
-        if isNew, let server = sub.server {
-            app.connections.connect(server)
-            app.selection = .topic(sub.id)
-            Task {
-                await app.notifier.requestAuthorization()
-                await app.connections.backfill(sub)
-            }
-        }
+        if isNew { app.selection = .topic(sub.id) }
         dismiss()
     }
 }

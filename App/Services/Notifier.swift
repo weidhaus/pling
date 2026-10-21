@@ -24,8 +24,21 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         center.delegate = self
     }
 
-    func requestAuthorization() async {
-        _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+    /// Returns whether notifications are allowed (prompting the first time).
+    @discardableResult func requestAuthorization() async -> Bool {
+        let log = Logger(subsystem: "com.weidhaus.pling", category: "notify")
+        do {
+            let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+            log.notice("authorization granted=\(granted)")
+            return granted
+        } catch {
+            log.error("authorization failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func authorizationStatus() async -> UNAuthorizationStatus {
+        await center.notificationSettings().authorizationStatus
     }
 
     /// Posts (or re-posts, replacing the previous banner) the notification for a message.
