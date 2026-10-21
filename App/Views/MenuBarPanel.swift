@@ -4,13 +4,19 @@ import SwiftUI
 struct MenuBarPanel: View {
     @Environment(AppModel.self) private var app
     @Environment(\.openSettings) private var openSettings
-    @Query(sort: [SortDescriptor(\StoredMessage.time, order: .reverse), SortDescriptor(\StoredMessage.receivedAt, order: .reverse)])
-    private var messages: [StoredMessage]
+    @Query(Self.recentDescriptor) private var recent: [StoredMessage]
+    @Query(filter: #Predicate<StoredMessage> { !$0.isRead }) private var unread: [StoredMessage]
     @Query private var subscriptions: [Subscription]
     @AppStorage(Prefs.doNotDisturb) private var doNotDisturb = false
 
-    private var recent: ArraySlice<StoredMessage> { messages.prefix(60) }
-    private var unreadCount: Int { messages.lazy.filter { !$0.isRead }.count }
+    private var unreadCount: Int { unread.count }
+
+    // Only fetch what the panel shows; history can hold thousands of messages.
+    private static var recentDescriptor: FetchDescriptor<StoredMessage> {
+        var d = FetchDescriptor<StoredMessage>(sortBy: [SortDescriptor(\.time, order: .reverse), SortDescriptor(\.receivedAt, order: .reverse)])
+        d.fetchLimit = 60
+        return d
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,7 +40,7 @@ struct MenuBarPanel: View {
                 Text("\(unreadCount) unread").font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Mark All as Read", systemImage: "envelope.open") { app.markAllRead(Array(messages)) }
+            Button("Mark All as Read", systemImage: "envelope.open") { app.markAllRead(unread) }
                 .labelStyle(.iconOnly)
                 .disabled(unreadCount == 0)
                 .help("Mark All as Read")
