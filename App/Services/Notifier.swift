@@ -17,7 +17,8 @@ enum NoteAction {
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private let center = UNUserNotificationCenter.current()
     private var categories: [String: UNNotificationCategory] = [:]
-    var onResponse: ((_ action: String, _ key: String) -> Void)?
+    /// `raw` is the ntfy message JSON a pushed notification carries, for messages the app hasn't stored yet.
+    var onResponse: ((_ action: String, _ key: String, _ raw: String?) -> Void)?
 
     override init() {
         super.init()
@@ -41,11 +42,23 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         await center.notificationSettings().authorizationStatus
     }
 
-    /// Posts (or re-posts, replacing the previous banner) the notification for a message.
-    func post(_ m: StoredMessage, subscription: Subscription, image: Data?) async {
+    /// Posts (or re-posts, replacing the previous banner) the notification for a message, now or at `date`.
+    func post(_ m: StoredMessage, subscription: Subscription, image: Data?, at date: Date? = nil) async {
+        let topicName = [subscription.emoji, subscription.title].compactMap(\.self).joined(separator: " ")
+        let content = Self.content(for: m, topicName: topicName, image: image)
+        content.categoryIdentifier = category(for: m)
+        let trigger = date.map { UNTimeIntervalNotificationTrigger(timeInterval: max($0.timeIntervalSinceNow, 1), repeats: false) }
+        do {
+            try await center.add(UNNotificationRequest(identifier: m.key, content: content, trigger: trigger))
+        } catch {
+            Logger(subsystem: "com.weidhaus.pling", category: "notify").error("post failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Notification content for a message. Shared with the iOS notification service extension.
+    static func content(for m: StoredMessage, topicName: String, image: Data?) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         let emoji = Emoji.split(m.tags).emoji.joined()
-        let topicName = [subscription.emoji, subscription.title].compactMap(\.self).joined(separator: " ")
         let lead = emoji.isEmpty ? "" : emoji + " "
         if m.title.isEmpty {
             content.title = lead + topicName
@@ -57,7 +70,6 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         if content.body.isEmpty, let name = m.attachmentName { content.body = "📎 \(name)" }
         content.threadIdentifier = m.subscriptionID.uuidString
         content.userInfo = ["key": m.key]
-        content.categoryIdentifier = category(for: m)
         switch m.priority {
         case ...2:
             content.interruptionLevel = .passive
@@ -68,17 +80,17 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             content.sound = .default
         default:
             content.interruptionLevel = .timeSensitive
+            #if os(macOS)
             content.sound = UNNotificationSound(named: UNNotificationSoundName("PlingUrgent.aiff"))
+            #else
+            content.sound = .default
+            #endif
         }
-        if let image, let file = Self.temporaryFile(image, name: m.attachmentName ?? "image"),
+        if let image, let file = temporaryFile(image, name: m.attachmentName ?? "image"),
            let attachment = try? UNNotificationAttachment(identifier: "image", url: file) {
             content.attachments = [attachment]
         }
-        do {
-            try await center.add(UNNotificationRequest(identifier: m.key, content: content, trigger: nil))
-        } catch {
-            Logger(subsystem: "com.weidhaus.pling", category: "notify").error("post failed: \(error.localizedDescription)")
-        }
+        return content
     }
 
     func postFailure(_ text: String) {
@@ -90,14 +102,21 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
 
     func remove(_ key: String) {
         center.removeDeliveredNotifications(withIdentifiers: [key])
+        center.removePendingNotificationRequests(withIdentifiers: [key])
     }
 
     private func category(for m: StoredMessage) -> String {
+        let category = Self.category(for: m)
+        guard categories[category.identifier] == nil else { return category.identifier }
+        categories[category.identifier] = category
+        center.setNotificationCategories(Set(categories.values))
+        return category.identifier
+    }
+
+    static func category(for m: StoredMessage) -> UNNotificationCategory {
         let actions = m.actions.filter { [.view, .http, .copy].contains($0.action) }.prefix(3)
         let urgent = m.priority >= 4
         let id = "msg|" + actions.map(\.label).joined(separator: "|") + (urgent ? "|ack" : "")
-        guard categories[id] == nil else { return id }
-
         var buttons = actions.enumerated().map { i, a in
             UNNotificationAction(identifier: NoteAction.ntfyPrefix + String(i), title: a.label, options: a.action == .view ? [.foreground] : [])
         }
@@ -108,9 +127,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             UNNotificationAction(identifier: NoteAction.snoozeTomorrow, title: "Remind Me Tomorrow"),
             UNNotificationAction(identifier: NoteAction.reminders, title: "Add to Reminders"),
         ]
-        categories[id] = UNNotificationCategory(identifier: id, actions: buttons, intentIdentifiers: [])
-        center.setNotificationCategories(Set(categories.values))
-        return id
+        return UNNotificationCategory(identifier: id, actions: buttons, intentIdentifiers: [])
     }
 
     static func plain(markdown: String) -> String {
@@ -134,7 +151,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let action = response.actionIdentifier
-        guard let key = response.notification.request.content.userInfo["key"] as? String else { return }
-        await MainActor.run { onResponse?(action, key) }
+        let info = response.notification.request.content.userInfo
+        guard let key = info["key"] as? String else { return }
+        let raw = info["ntfy"] as? String
+        await MainActor.run { onResponse?(action, key, raw) }
     }
 }

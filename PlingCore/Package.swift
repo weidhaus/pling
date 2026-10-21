@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "PlingCore",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v26), .iOS(.v26)],
     products: [
         .library(name: "PlingCore", targets: ["PlingCore"]),
         .executable(name: "ntfy-e2e", targets: ["ntfy-e2e"]),

@@ -1,10 +1,14 @@
-import AppKit
 import EventKit
 import PlingCore
-import ServiceManagement
 import SwiftData
-import Sparkle
 import SwiftUI
+#if os(macOS)
+import AppKit
+import ServiceManagement
+import Sparkle
+#else
+import UIKit
+#endif
 import UserNotifications
 
 enum SidebarItem: Hashable {
@@ -30,14 +34,17 @@ enum SidebarItem: Hashable {
     var isAddingTopic = false
     var editingTopic: Subscription?
     var notificationStatus = UNAuthorizationStatus.notDetermined
+    #if os(iOS)
+    var isShowingSettings = false
+    #endif
 
     let context: ModelContext
     @ObservationIgnored private(set) var connections: ConnectionManager!
     @ObservationIgnored let notifier = Notifier()
     @ObservationIgnored private(set) var eventStore = EKEventStore()
-    #if DEBUG
+    #if os(macOS) && DEBUG
     @ObservationIgnored let updater = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
-    #else
+    #elseif os(macOS)
     @ObservationIgnored let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     #endif
     @ObservationIgnored var openWindow: OpenWindowAction?
@@ -47,7 +54,7 @@ enum SidebarItem: Hashable {
     init(context: ModelContext) {
         self.context = context
         connections = ConnectionManager(context: context) { [weak self] m, sub in self?.handleNew(m, subscription: sub) }
-        notifier.onResponse = { [weak self] action, key in self?.handleNotification(action: action, key: key) }
+        notifier.onResponse = { [weak self] action, key, raw in self?.handleNotification(action: action, key: key, raw: raw) }
     }
 
     func start() {
@@ -55,10 +62,15 @@ enum SidebarItem: Hashable {
         #if DEBUG
         seedFromEnvironment()
         #endif
+        #if os(macOS)
         if !Prefs.defaults.bool(forKey: "didLaunchBefore") {
             Prefs.defaults.set(true, forKey: "didLaunchBefore")
             try? SMAppService.mainApp.register()
         }
+        let didBecomeActive = NSApplication.didBecomeActiveNotification
+        #else
+        let didBecomeActive = UIApplication.didBecomeActiveNotification
+        #endif
         connections.start()
         alertLoop = Task { [weak self] in
             while !Task.isCancelled {
@@ -71,7 +83,7 @@ enum SidebarItem: Hashable {
             // Users who finished onboarding before it asked for permission get asked once now.
             if Prefs.defaults.bool(forKey: Prefs.onboarded), notificationStatus == .notDetermined { await requestNotifications() }
         }
-        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+        NotificationCenter.default.addObserver(forName: didBecomeActive, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { Task { await self?.refreshNotificationStatus() } }
         }
     }
@@ -86,7 +98,11 @@ enum SidebarItem: Hashable {
     }
 
     func openNotificationSettings() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(Bundle.main.bundleIdentifier ?? "")")!)
+        #if os(macOS)
+        Platform.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(Bundle.main.bundleIdentifier ?? "")")!)
+        #else
+        Platform.open(URL(string: UIApplication.openNotificationSettingsURLString)!)
+        #endif
     }
 
     var remindersAuthorized: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
@@ -110,6 +126,20 @@ enum SidebarItem: Hashable {
         connections.connect(server)
         Task { await connections.backfill(sub) }
         return sub
+    }
+
+    /// Removes a server with its topics, messages and secrets. Nothing changes on the server.
+    func remove(_ server: Server) {
+        connections.stop(server.id)
+        for sub in server.subscriptions {
+            let id = sub.id
+            try? context.delete(model: StoredMessage.self, where: #Predicate { $0.subscriptionID == id })
+            Keychain.delete(sub.passphraseAccount)
+        }
+        Keychain.delete(server.secretAccount)
+        selection = .all
+        context.delete(server)
+        try? context.save()
     }
 
     static func isValidTopic(_ topic: String) -> Bool { topic.wholeMatch(of: /[-_A-Za-z0-9]{1,64}/) != nil }
@@ -145,6 +175,10 @@ enum SidebarItem: Hashable {
             m.nextAlertAt = .now.addingTimeInterval(realertInterval)
             try? context.save()
         }
+        #if os(iOS)
+        // The relay's push already shows it, also while Pling is open.
+        if subscription.server?.relayURL != nil { return }
+        #endif
         Task { await notifier.post(m, subscription: subscription, image: await notificationImage(m)) }
     }
 
@@ -217,6 +251,12 @@ enum SidebarItem: Hashable {
         m.nextAlertAt = option.date
         notifier.remove(m.key)
         try? context.save()
+        #if os(iOS)
+        // The alert loop only runs while Pling is open, so let the system deliver it.
+        if let sub = subscription(m.subscriptionID) {
+            Task { await notifier.post(m, subscription: sub, image: nil, at: option.date) }
+        }
+        #endif
     }
 
     func perform(_ action: Action, on m: StoredMessage) async throws {
@@ -242,12 +282,17 @@ enum SidebarItem: Hashable {
         try eventStore.save(reminder, commit: true)
     }
 
-    func handleNotification(action: String, key: String) {
+    func handleNotification(action: String, key: String, raw: String? = nil) {
+        if message(key) == nil, let raw, let ntfy = try? NtfyMessage.decode(Data(raw.utf8)),
+           let serverID = UUID(uuidString: String(key.prefix { $0 != "|" })) {
+            // Pushed while Pling wasn't running; the stream would deliver it later.
+            connections.ingest(ntfy, serverID: serverID, notify: false)
+        }
         guard let m = message(key) else { return }
         switch action {
         case UNNotificationDefaultActionIdentifier:
             acknowledge(m)
-            if let url = m.click, ActionRunner.isSafe(url) { NSWorkspace.shared.open(url) } else { show(m) }
+            if let url = m.click, ActionRunner.isSafe(url) { Platform.open(url) } else { show(m) }
         case NoteAction.ack: acknowledge(m)
         case NoteAction.snooze15: snooze(m, .minutes15)
         case NoteAction.snooze60: snooze(m, .hour1)
@@ -275,8 +320,10 @@ enum SidebarItem: Hashable {
     }
 
     func showMainWindow() {
+        #if os(macOS)
         openWindow?(id: "main")
         NSApp.activate()
+        #endif
     }
 
     func compose(to subscription: Subscription? = nil) {

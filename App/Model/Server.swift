@@ -21,6 +21,8 @@ nonisolated enum AuthKind: String, CaseIterable, Identifiable, Codable {
     var authKind = AuthKind.none
     var username: String?
     var lastMessageID: String?
+    /// iOS only: pling-relay that pushes this server's messages through APNs.
+    var relayURL: URL?
     var createdAt = Date.now
     @Relationship(deleteRule: .cascade, inverse: \Subscription.server) var subscriptions: [Subscription] = []
 

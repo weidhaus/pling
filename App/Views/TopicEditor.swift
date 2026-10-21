@@ -72,8 +72,10 @@ struct TopicEditor: View {
             }
         }
         .formStyle(.grouped)
+        #if os(macOS)
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
+        #endif
         .navigationTitle(isNew ? "Add Topic" : "Edit Topic")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

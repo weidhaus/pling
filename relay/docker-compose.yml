@@ -1,0 +1,23 @@
+# Runs next to ntfy. Expose port 8080 at a public HTTPS URL (reverse proxy or tunnel),
+# then enter that URL as "Push Relay" for the server in Pling for iOS.
+services:
+  pling-relay:
+    build: .
+    container_name: pling-relay
+    restart: unless-stopped
+    environment:
+      NTFY_URL: http://ntfy:80          # ntfy as seen from this container
+      NTFY_USER: pling                  # needs read access to every topic people register
+      NTFY_PASSWORD: ${NTFY_PASSWORD}
+      APNS_KEY_FILE: /run/secrets/apns.p8
+      APNS_KEY_ID: ${APNS_KEY_ID}
+      APNS_TEAM_ID: 5SB3S8ESR3
+      APNS_TOPIC: com.weidhaus.pling.ios
+    volumes:
+      - ./data:/data
+      - ./apns.p8:/run/secrets/apns.p8:ro
+    networks: [ntfy]
+networks:
+  ntfy:
+    external: true
+    name: ntfy_default

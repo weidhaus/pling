@@ -120,8 +120,10 @@ struct ComposeSheet: View {
             }
         }
         .formStyle(.grouped)
+        #if os(macOS)
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
+        #endif
         .navigationTitle("New Message")
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item]) { result in
             if case let .success(url) = result { file = url }

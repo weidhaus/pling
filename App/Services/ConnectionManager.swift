@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import CryptoKit
 import Foundation
 import Network
@@ -42,11 +46,18 @@ enum ConnectionStatus: Equatable {
     func start() {
         prune()
         restartAll()
+        #if os(macOS)
         let center = NSWorkspace.shared.notificationCenter
-        observers.append(center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+        let resume = NSWorkspace.didWakeNotification, pause = NSWorkspace.willSleepNotification
+        #else
+        // iOS suspends background apps; pushes cover that time and the stream catches up on return.
+        let center = NotificationCenter.default
+        let resume = UIApplication.willEnterForegroundNotification, pause = UIApplication.didEnterBackgroundNotification
+        #endif
+        observers.append(center.addObserver(forName: resume, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.restartAll() }
         })
-        observers.append(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+        observers.append(center.addObserver(forName: pause, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.stopAll() }
         })
         pathMonitor.pathUpdateHandler = { [weak self] path in

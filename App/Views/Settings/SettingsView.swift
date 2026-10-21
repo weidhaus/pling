@@ -16,7 +16,6 @@ struct SettingsView: View {
 
 struct ServersSettings: View {
     @Environment(AppModel.self) private var app
-    @Environment(\.modelContext) private var context
     @Query(sort: \Server.createdAt) private var servers: [Server]
     @State private var selection: UUID?
     @State private var adding = false
@@ -75,16 +74,7 @@ struct ServersSettings: View {
 
     private func delete() {
         guard let server = selected else { return }
-        app.connections.stop(server.id)
-        for sub in server.subscriptions {
-            let id = sub.id
-            try? context.delete(model: StoredMessage.self, where: #Predicate { $0.subscriptionID == id })
-            Keychain.delete(sub.passphraseAccount)
-        }
-        Keychain.delete(server.secretAccount)
-        app.selection = .all
-        context.delete(server)
-        try? context.save()
+        app.remove(server)
         selection = servers.first?.id
     }
 }

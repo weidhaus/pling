@@ -20,11 +20,16 @@ struct MainWindow: View {
             }
         }
         .searchable(text: $search, placement: .toolbar, prompt: "Search Messages")
-        .sheet(isPresented: $app.isComposing) { ComposeSheet(initial: app.composeTopic) }
-        .sheet(isPresented: $app.isAddingTopic) { TopicEditor(subscription: nil) }
-        .sheet(item: $app.editingTopic) { TopicEditor(subscription: $0) }
+        .sheet(isPresented: $app.isComposing) { SheetStack { ComposeSheet(initial: app.composeTopic) } }
+        .sheet(isPresented: $app.isAddingTopic) { SheetStack { TopicEditor(subscription: nil) } }
+        .sheet(item: $app.editingTopic) { sub in SheetStack { TopicEditor(subscription: sub) } }
+        #if os(iOS)
+        .sheet(isPresented: $app.isShowingSettings) { SettingsSheet() }
+        #endif
+        #if os(macOS)
         .onAppear { NSApp.setActivationPolicy(.regular) }
         .onDisappear { NSApp.setActivationPolicy(.accessory) }
+        #endif
     }
 }
 
@@ -56,6 +61,14 @@ struct SidebarView: View {
                 }
             }
         }
+        #if os(iOS)
+        .navigationTitle("Pling")
+        .toolbar {
+            ToolbarItem {
+                Button("Settings", systemImage: "gearshape") { app.isShowingSettings = true }
+            }
+        }
+        #endif
         .safeAreaInset(edge: .bottom) {
             if !servers.isEmpty {
                 Button("Add Topic", systemImage: "plus") { app.isAddingTopic = true }
@@ -133,11 +146,11 @@ struct TopicRow: View {
             Button("Edit Topic…") { editing = true }
             Button("Unsubscribe…", role: .destructive) { confirmingDelete = true }
         }
-        .sheet(isPresented: $editing) { TopicEditor(subscription: subscription) }
+        .sheet(isPresented: $editing) { SheetStack { TopicEditor(subscription: subscription) } }
         .confirmationDialog("Unsubscribe from “\(subscription.title)”?", isPresented: $confirmingDelete) {
             Button("Unsubscribe", role: .destructive) { unsubscribe() }
         } message: {
-            Text("Its messages are removed from this Mac. The topic on the server isn’t affected.")
+            Text("Its messages are removed from this \(Platform.deviceName). The topic on the server isn’t affected.")
         }
     }
 
@@ -203,6 +216,17 @@ struct MessageList: View {
                             MessageRow(message: m, subscription: lookup[m.subscriptionID], showsTopic: currentSubscription == nil)
                                 .id(m.key)
                                 .listRowBackground(app.highlightedKey == m.key ? Color.accentColor.opacity(0.12) : nil)
+                                #if os(iOS)
+                                .swipeActions(edge: .leading) {
+                                    Button(m.isRead ? "Unread" : "Read", systemImage: m.isRead ? "envelope.badge" : "envelope.open") { app.toggleRead(m) }
+                                        .tint(.blue)
+                                }
+                                .swipeActions(edge: .trailing) {
+                                    Button("Delete", systemImage: "trash", role: .destructive) { app.delete(m) }
+                                    Button("Remind Me", systemImage: "clock") { app.snooze(m, .hour1) }
+                                        .tint(.indigo)
+                                }
+                                #endif
                         }
                     } header: {
                         DayHeader(day: day.day)
@@ -218,6 +242,9 @@ struct MessageList: View {
         }
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
+        #if os(iOS)
+        .refreshable { app.connections.restartAll() }
+        #endif
         .toolbar {
             ToolbarItem {
                 Button("Mark All as Read", systemImage: "envelope.open") { app.markAllRead(visible) }
@@ -229,9 +256,16 @@ struct MessageList: View {
                         .help("Topic Settings: name, notifications, encryption passphrase")
                 }
             }
+            #if os(macOS)
             ToolbarItem(placement: .primaryAction) {
                 Button("New Message", systemImage: "square.and.pencil") { app.compose(to: currentSubscription) }
             }
+            #else
+            ToolbarSpacer(placement: .bottomBar)
+            ToolbarItem(placement: .bottomBar) {
+                Button("New Message", systemImage: "square.and.pencil") { app.compose(to: currentSubscription) }
+            }
+            #endif
         }
     }
 

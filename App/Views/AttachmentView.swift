@@ -1,4 +1,3 @@
-import AppKit
 import QuickLook
 import SwiftUI
 import UniformTypeIdentifiers
@@ -8,7 +7,7 @@ struct AttachmentView: View {
     let message: StoredMessage
     var maxHeight: CGFloat = 240
 
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
     @State private var failed = false
     @State private var previewURL: URL?
     @State private var saving = false
@@ -30,7 +29,7 @@ struct AttachmentView: View {
             if let image {
                 Button { preview() } label: {
                     let size = fitted(image.size)
-                    Image(nsImage: image)
+                    Image(platformImage: image)
                         .resizable()
                         .frame(width: size.width, height: size.height)
                         .clipShape(.rect(cornerRadius: 10))
@@ -62,9 +61,17 @@ struct AttachmentView: View {
         return HStack(spacing: 8) {
             chip(symbol: failed ? "exclamationmark.triangle" : "doc", title: message.attachmentName ?? "Attachment",
                  detail: failed ? "Couldn’t load" : detail)
+            #if os(macOS)
             Button(saving ? "Saving…" : "Save to Downloads") { Task { await save() } }
                 .controlSize(.small)
                 .disabled(saving)
+            #else
+            // Quick Look has Share and Save to Files.
+            Button("Open") { preview() }
+                .controlSize(.small)
+                .disabled(failed)
+                .quickLookPreview($previewURL)
+            #endif
         }
     }
 
@@ -83,7 +90,7 @@ struct AttachmentView: View {
     private func load() async {
         do {
             let data = try await app.attachmentData(message)
-            guard let img = NSImage(data: data) else { failed = true; return }
+            guard let img = PlatformImage(data: data) else { failed = true; return }
             image = img
         } catch {
             // Rows re-render and cancel their task; that isn't a failure.
@@ -103,6 +110,7 @@ struct AttachmentView: View {
         }
     }
 
+    #if os(macOS)
     private func save() async {
         saving = true
         defer { saving = false }
@@ -124,4 +132,5 @@ struct AttachmentView: View {
             failed = true
         }
     }
+    #endif
 }

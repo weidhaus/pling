@@ -141,7 +141,11 @@ struct MessageRow: View {
                 .fixedSize(horizontal: false, vertical: true)
             if !expanded, message.body.count > limit * 60 || message.body.filter(\.isNewline).count >= limit {
                 Button("Show More") { expanded = true }
+                    #if os(macOS)
                     .buttonStyle(.link)
+                    #else
+                    .buttonStyle(.borderless)
+                    #endif
                     .font(.caption)
             }
         }
@@ -239,7 +243,9 @@ struct MessageQuickActions: View {
         }
         .labelStyle(.iconOnly)
         .buttonStyle(.borderless)
+        #if os(macOS)
         .menuStyle(.borderlessButton)
+        #endif
         .font(.caption)
         .fixedSize()
     }
@@ -271,11 +277,10 @@ struct MessageMenu: View {
         }
         Divider()
         if let url = message.click, ActionRunner.isSafe(url) {
-            Button("Open Link") { NSWorkspace.shared.open(url) }
+            Button("Open Link") { Platform.open(url) }
         }
         Button("Copy Text") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString([message.title, message.body].filter { !$0.isEmpty }.joined(separator: "\n"), forType: .string)
+            Platform.copy([message.title, message.body].filter { !$0.isEmpty }.joined(separator: "\n"))
         }
         Divider()
         Button("Delete", role: .destructive) { app.delete(message) }

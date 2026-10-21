@@ -1,4 +1,4 @@
-import AppKit
+import Foundation
 import PlingCore
 
 /// Performs ntfy user actions (https://docs.ntfy.sh/publish/#action-buttons).
@@ -14,7 +14,7 @@ enum ActionRunner {
         switch action.action {
         case .view:
             guard let url = action.url, isSafe(url) else { throw Failure(errorDescription: "“\(action.label)” has no web link.") }
-            NSWorkspace.shared.open(url)
+            Platform.open(url)
         case .http:
             guard let url = action.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
                 throw Failure(errorDescription: "“\(action.label)” has no web URL.")
@@ -28,8 +28,7 @@ enum ActionRunner {
                 throw Failure(errorDescription: "“\(action.label)” returned HTTP \(code).")
             }
         case .copy:
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(action.value ?? "", forType: .string)
+            Platform.copy(action.value ?? "")
         case .broadcast, .unknown:
             break
         }

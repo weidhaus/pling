@@ -5,3 +5,6 @@ DerivedData/
 .build/
 *.xcodeproj/xcuserdata/
 Pling.xcodeproj/
+relay/data/
+relay/apns.p8
+relay/.env

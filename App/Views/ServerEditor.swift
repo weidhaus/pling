@@ -14,6 +14,7 @@ struct ServerEditor: View {
     @State private var authKind = AuthKind.basic
     @State private var username = ""
     @State private var secret = ""
+    @State private var relayText = ""
     @State private var testResult: Result<String, Error>?
     @State private var testing = false
 
@@ -22,6 +23,12 @@ struct ServerEditor: View {
         if !text.isEmpty, !text.contains("://") { text = "https://" + text }
         while text.hasSuffix("/") { text.removeLast() }
         guard let url = URL(string: text), url.host() != nil, ["http", "https"].contains(url.scheme) else { return nil }
+        return url
+    }
+
+    private var relayURL: URL? {
+        guard !relayText.isEmpty, let url = URL(string: relayText.trimmingCharacters(in: .whitespaces)),
+              url.scheme == "https", url.host() != nil else { return nil }
         return url
     }
 
@@ -42,6 +49,10 @@ struct ServerEditor: View {
                 TextField("Server URL", text: $urlText, prompt: Text("https://ntfy.sh"))
                     .textContentType(.URL)
                     .autocorrectionDisabled()
+                    #if os(iOS)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    #endif
                 TextField("Name", text: $name, prompt: Text(url?.host() ?? "My Server"))
             }
             Section("Sign In") {
@@ -55,19 +66,41 @@ struct ServerEditor: View {
                     TextField("Username", text: $username)
                         .textContentType(.username)
                         .autocorrectionDisabled()
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
                     SecureField("Password", text: $secret, prompt: Text(hasStoredSecret ? "Saved in Keychain" : "Required"))
                         .textContentType(.password)
                 case .token:
                     SecureField("Token", text: $secret, prompt: Text(hasStoredSecret ? "Saved in Keychain" : "tk_…"))
                 }
             }
+            #if os(iOS)
+            Section {
+                TextField("Push Relay", text: $relayText, prompt: Text("https://push.example.com"))
+                    .textContentType(.URL)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            } header: {
+                Text("Push Notifications")
+            } footer: {
+                Text("iOS only delivers messages to Pling in the background through a pling-relay running next to your server. Without one, messages arrive while Pling is open.")
+            }
+            #endif
             Section {
                 HStack {
                     Button("Test Connection") { Task { await test() } }
+                        #if os(iOS)
+                        .buttonStyle(.borderless)
+                        #endif
                         .disabled(url == nil || testing)
                     if testing { ProgressView().controlSize(.small) }
                     Spacer()
                     Button(server == nil ? "Add Server" : "Save") { save() }
+                        #if os(iOS)
+                        .disabled(relayText.isEmpty == false && relayURL == nil)
+                        #endif
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                         .disabled(!canSave)
@@ -95,6 +128,7 @@ struct ServerEditor: View {
         urlText = server.url.absoluteString
         authKind = server.authKind
         username = server.username ?? ""
+        relayText = server.relayURL?.absoluteString ?? ""
     }
 
     private var draftAuth: NtfyAuth {
@@ -137,6 +171,9 @@ struct ServerEditor: View {
         target.url = url
         target.authKind = authKind
         target.username = authKind == .basic ? username : nil
+        #if os(iOS)
+        target.relayURL = relayURL
+        #endif
         if authKind == .none { Keychain.delete(target.secretAccount) } else if !secret.isEmpty { Keychain.set(secret, for: target.secretAccount) }
         try? context.save()
         secret = ""
@@ -145,6 +182,7 @@ struct ServerEditor: View {
     }
 }
 
+#if os(macOS)
 struct NoServersView: View {
     @Environment(\.openWindow) private var openWindow
 
@@ -159,3 +197,4 @@ struct NoServersView: View {
         }
     }
 }
+#endif

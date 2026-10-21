@@ -69,6 +69,16 @@ Pling checks for updates automatically. You can also choose **Pling › Check fo
 
 > **Why does Pling keep running?** ntfy's instant push to Apple devices goes through a relay that only the official apps can use. Pling holds its own lightweight connection to each server instead: one HTTP stream per server. It reconnects after sleep or network changes and catches up on anything missed, so it starts at login by default.
 
+## iPhone and iPad
+
+Pling for iOS shares the Mac app's code: the same inbox, topics, compose, E2E encryption and swipe actions. iOS suspends apps in the background, and ntfy's own push relay only serves the official apps, so background notifications come from **pling-relay**, a small Go service in [`relay/`](relay) that runs next to your ntfy server:
+
+1. In the Apple Developer portal, create an APNs key (Keys › Apple Push Notifications service) and save it as `relay/apns.p8`.
+2. `cd relay && NTFY_PASSWORD=… APNS_KEY_ID=… docker compose up -d`. It joins ntfy's Docker network and listens on port 8080.
+3. Expose it over HTTPS (reverse proxy or tunnel) and enter that URL under **Push Relay** in the server's settings in Pling.
+
+Devices register with their own ntfy credentials. The relay checks read access for each topic with ntfy and doesn't store those credentials. It forwards encrypted messages as ciphertext, and Pling's notification extension decrypts them on the device. Without a relay, messages arrive while Pling is open.
+
 ## End-to-end encryption
 
 ntfy has no built-in end-to-end encryption, so Pling defines a small, documented format. To set it up, open the topic's **Topic Settings** (the slider button in the toolbar), enter a passphrase, and share that passphrase with everyone on the topic.
@@ -123,7 +133,9 @@ The project signs with the maintainer's Developer ID. For your own build, change
 ```
 PlingCore/        Swift package: ntfy client, message model, E2E crypto, ntfy-e2e CLI (swift test)
 App/              SwiftUI app: menu bar panel, window, onboarding, settings, notifications
-scripts/          release.sh: archive, notarize, Sparkle appcast, GitHub release
+iOS/              iOS app entry, settings, push registration; Notify/ is the notification service extension
+relay/            pling-relay: ntfy → APNs bridge for the iOS app (go test ./...)
+scripts/          release.sh (Mac: notarize, Sparkle, GitHub release), testflight.sh (iOS)
 ```
 
 Integration tests run against a real server when `PLING_TEST_SERVER`, `PLING_TEST_USER` and `PLING_TEST_PASSWORD` are set. Keep them in `.env.local`, which git ignores:
