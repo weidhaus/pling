@@ -45,6 +45,8 @@ struct MessageRow: View {
     let subscription: Subscription?
     var showsTopic = true
     var compact = false
+    /// The detail view shows the whole body.
+    var fullText = false
 
     @State private var expanded = false
     @State private var isHovering = false
@@ -136,10 +138,10 @@ struct MessageRow: View {
                 .environment(\.openURL, OpenURLAction { ActionRunner.isSafe($0) ? .systemAction : .discarded })
                 .font(compact ? .callout : .body)
                 .foregroundStyle(message.decryptFailed ? .secondary : .primary)
-                .lineLimit(expanded ? nil : limit)
+                .lineLimit(expanded || fullText ? nil : limit)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-            if !expanded, message.body.count > limit * 60 || message.body.filter(\.isNewline).count >= limit {
+            if !expanded, !fullText, message.body.count > limit * 60 || message.body.filter(\.isNewline).count >= limit {
                 Button("Show More") { expanded = true }
                     #if os(macOS)
                     .buttonStyle(.link)
@@ -254,6 +256,8 @@ struct MessageQuickActions: View {
 struct MessageMenu: View {
     @Environment(AppModel.self) private var app
     let message: StoredMessage
+    /// Replaces the default delete, e.g. to leave a view that shows this message first.
+    var onDelete: (() -> Void)?
 
     var body: some View {
         Button(message.isRead ? "Mark as Unread" : "Mark as Read") { app.toggleRead(message) }
@@ -283,7 +287,7 @@ struct MessageMenu: View {
             Platform.copy([message.title, message.body].filter { !$0.isEmpty }.joined(separator: "\n"))
         }
         Divider()
-        Button("Delete", role: .destructive) { app.delete(message) }
+        Button("Delete", role: .destructive) { if let onDelete { onDelete() } else { app.delete(message) } }
     }
 }
 

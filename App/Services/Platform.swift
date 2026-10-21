@@ -43,6 +43,19 @@ extension Image {
     }
 }
 
+/// On iOS a tap on a message opens it; on macOS rows show everything inline.
+struct MessageLink<Content: View>: View {
+    let key: String
+    @ViewBuilder var content: Content
+    var body: some View {
+        #if os(macOS)
+        content
+        #else
+        NavigationLink(value: key) { content }
+        #endif
+    }
+}
+
 /// Sheets need their own navigation stack on iOS for a title and toolbar; macOS sheets have both already.
 struct SheetStack<Content: View>: View {
     @ViewBuilder var content: Content

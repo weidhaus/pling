@@ -5,6 +5,9 @@ struct MainWindow: View {
     @Environment(AppModel.self) private var app
     @Query(sort: \Server.createdAt) private var servers: [Server]
     @State private var search = ""
+    #if os(iOS)
+    @State private var path: [String] = []
+    #endif
 
     var body: some View {
         @Bindable var app = app
@@ -15,8 +18,22 @@ struct MainWindow: View {
             if servers.isEmpty {
                 NoServersView()
             } else {
+                #if os(iOS)
+                NavigationStack(path: $path) {
+                    MessageList(item: app.selection ?? .all, search: search)
+                        .safeAreaInset(edge: .top, spacing: 0) { NotificationsOffBanner() }
+                        .navigationDestination(for: String.self) { MessageDetail(key: $0) }
+                }
+                .onChange(of: app.selection) { path = [] }
+                .onChange(of: app.highlightedKey, initial: true) { _, key in
+                    guard let key else { return }
+                    // After the selection change from the same tap has reset the path.
+                    Task { path = [key]; app.highlightedKey = nil }
+                }
+                #else
                 MessageList(item: app.selection ?? .all, search: search)
                     .safeAreaInset(edge: .top, spacing: 0) { NotificationsOffBanner() }
+                #endif
             }
         }
         .searchable(text: $search, placement: .toolbar, prompt: "Search Messages")
@@ -213,7 +230,9 @@ struct MessageList: View {
                 ForEach(days, id: \.day) { day in
                     Section {
                         ForEach(day.messages) { m in
-                            MessageRow(message: m, subscription: lookup[m.subscriptionID], showsTopic: currentSubscription == nil)
+                            MessageLink(key: m.key) {
+                                MessageRow(message: m, subscription: lookup[m.subscriptionID], showsTopic: currentSubscription == nil)
+                            }
                                 .id(m.key)
                                 .listRowBackground(app.highlightedKey == m.key ? Color.accentColor.opacity(0.12) : nil)
                                 #if os(iOS)
