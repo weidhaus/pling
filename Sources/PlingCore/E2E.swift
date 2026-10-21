@@ -73,6 +73,7 @@ public enum E2E {
     }
 
     public static func open(_ body: String, key: SymmetricKey) throws -> E2EPayload {
+        let body = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard body.hasPrefix(prefix) else { throw Failure.notEncrypted }
         guard let data = fromBase64url(String(body.dropFirst(prefix.count))) else { throw Failure.badEncoding }
         let json = try openData(data, key: key)
