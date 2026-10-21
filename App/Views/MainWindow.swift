@@ -38,10 +38,12 @@ struct SidebarView: View {
         List(selection: $app.selection) {
             Section {
                 Label("All Messages", systemImage: "tray.full").tag(SidebarItem.all)
-                Label("Unread", systemImage: "envelope.badge").tag(SidebarItem.unread)
+                Label("Unread", systemImage: "envelope.badge")
                     .badge(unread.count)
-                Label("Important", systemImage: "exclamationmark.circle").tag(SidebarItem.important)
+                    .tag(SidebarItem.unread)
+                Label("Important", systemImage: "exclamationmark.circle")
                     .badge(unread.filter { $0.priority >= 4 }.count)
+                    .tag(SidebarItem.important)
             }
             ForEach(servers) { server in
                 Section {
