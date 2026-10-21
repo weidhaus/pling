@@ -4,3 +4,4 @@ build/
 DerivedData/
 .build/
 *.xcodeproj/xcuserdata/
+Pling.xcodeproj/
